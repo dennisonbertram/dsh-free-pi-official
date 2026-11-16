@@ -1,0 +1,31 @@
+{
+  "name": "dsh-free-pi-official",
+  "version": "0.1.0-beta.2",
+  "description": "FreePi for DeepSeek Harness: free AI models, paid for by ads shown above the composer",
+  "keywords": ["dsh-plugin", "deepseek-harness", "freepi", "free", "llm", "ad-supported"],
+  "license": "MIT",
+  "homepage": "https://freepi.ai/docs/deepseek-harness",
+  "repository": { "type": "git", "url": "git+https://github.com/dennisonbertram/dsh-free-pi-official.git" },
+  "bugs": { "url": "https://github.com/dennisonbertram/dsh-free-pi-official/issues" },
+  "scripts": { "test": "node --test test/*.test.mjs" },
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": ["index.js", "openai-stream.js", "session-queue.js", "client.js", "cordis.patch.yml", "locale/*.json", "README.md", "LICENSE"],
+  "engines": { "dsh": ">=0.2.2-rc.1" },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "inject": ["@deepseek-ai/dsh-client-ui-renderer", "@deepseek-ai/dsh-client-ui-conversation"]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-llm": "*"
+  }
+}

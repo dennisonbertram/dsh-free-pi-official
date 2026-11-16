@@ -1,0 +1,14 @@
+# FreePi for DeepSeek Harness. Adds one model provider ("freepi") beside whatever the profile already has; it does not
+# touch other providers. `gateway` is the FreePi server the plugin talks to (FREEPI_GATEWAY overrides it).
+- insert:
+    - id: freepi
+      name: dsh-free-pi-official
+      config:
+        gateway: !!js "process.env.FREEPI_GATEWAY ?? 'https://api.freepi.ai'"
+
+# New sessions start on FreePi, so install -> sign in -> type works with no model setup. `auto` means the server's
+# current default model; the plugin sends that model's real id. A profile's own patch layer, applied later, still wins.
+- id: agent-default-model
+  config:
+    provider: freepi
+    model: auto
