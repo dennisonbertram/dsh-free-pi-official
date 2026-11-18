@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { spawn } from 'node:child_process'
-import { FreePiAdapter, loadInstallSecret } from '../index.js'
+import { FreePiAdapter, apply, loadInstallSecret } from '../index.js'
 
 const originalFetch = globalThis.fetch
 const options = (model = 'm') => ({ model, messages: [] })
@@ -325,4 +325,39 @@ test('queue: cancelling while waiting to ask again ends the request at once', as
     await assert.rejects(async () => { for await (const _chunk of adapter.stream({ ...options(), sessionId: 's-abort', signal: controller.signal })) {} }, /stopped/)
     assert.ok(Date.now() - started < 200, 'did not wait out the retry delay')
   } finally { globalThis.fetch = originalFetch }
+})
+
+test('pairing route: an HTTP request must pass the harness access check; an admitted in-process read does not', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'freepi-route-'))
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  try {
+    let route
+    const seen = []
+    const services = {
+      webServer: { register: (r) => { route = r; return () => {} } },
+      connection: { requestRejection: (request) => { seen.push(request); return request.headers.get('origin') ? 403 : request.headers.get('cookie') === 'ok' ? undefined : 401 } },
+    }
+    const ctx = {
+      llm: { registerAdapter: () => () => {} },
+      effect: (fn) => fn(),
+      inject: (names, fn) => { assert.deepEqual(names, ['webServer', 'connection']); fn({ ...services, effect: (f) => f() }) },
+    }
+    apply(ctx, { gateway: 'http://gateway.test' })
+    const url = 'http://127.0.0.1/freepi/pairing'
+    const anonymous = await route.resource(new Request(url))
+    assert.equal(anonymous.status, 401)
+    assert.equal(await anonymous.text(), '')
+    assert.equal((await route.resource(new Request(url, { headers: { origin: 'https://evil.example' } }))).status, 403)
+    assert.equal((await route.resource(new Request(url, { headers: { cookie: 'ok', origin: 'https://evil.example' } }))).status, 403)
+    const allowed = await route.resource(new Request(url, { headers: { cookie: 'ok' } }))
+    assert.equal(allowed.status, 200)
+    assert.match((await allowed.json()).install_id, /^[0-9a-f]{32}$/)
+    const before = seen.length
+    assert.equal((await route.resource(new Request(url), { id: 'peer' })).status, 200)
+    assert.equal(seen.length, before)
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = previous
+    rmSync(home, { recursive: true, force: true })
+  }
 })

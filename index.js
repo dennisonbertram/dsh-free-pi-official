@@ -14,7 +14,7 @@ export const name = 'freepi'
 export const inject = ['llm']
 
 const PROVIDER = 'freepi'
-const VERSION = '0.1.0-beta.2'
+const VERSION = '0.1.0-beta.3'
 // `auto` is the harness-side name for "the server's current default model". A request sends the real id of that
 // default (the `model` field of /client-version); only if that is unknown does `auto` itself go out, which the server
 // resolves to its default like any id it does not know.
@@ -218,11 +218,19 @@ export function apply(ctx, config = {}) {
   // Profiles without a web server (headless, SDK) simply never run this part; the provider above still registers,
   // and the gateway refuses its requests because no bar is on screen.
   const body = JSON.stringify({ gateway, install_id: installIdOf(secret), version: VERSION })
-  ctx.inject(['webServer'], (web) => {
+  // An HTTP request (the web page, and the desktop app, which forwards the page's request with the host cookie) must
+  // pass the harness's own access check, its Host/Origin fence and signed-in cookie, so another page open in the
+  // browser cannot call this route. Only a webServer.readResource(request, peer) read arrives with a Peer, and the
+  // harness admitted that Peer already.
+  ctx.inject(['webServer', 'connection'], (web) => {
     web.effect(() => web.webServer.register({
       kind: 'exact',
       path: '/freepi/pairing',
-      resource: async () => new Response(body, { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } }),
+      resource: async (request, peer) => {
+        const refused = peer === undefined ? web.connection.requestRejection(request) : undefined
+        if (refused !== undefined) return new Response(null, { status: refused, headers: { 'cache-control': 'no-store' } })
+        return new Response(body, { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } })
+      },
     }), 'freepi: pairing route')
   })
 }
